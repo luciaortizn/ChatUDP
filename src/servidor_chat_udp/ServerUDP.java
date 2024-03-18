@@ -10,7 +10,6 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -191,20 +190,20 @@ public class ServerUDP {
     }
 
     public static void sendFiles(Map<SocketAddress, PublicKey> kp, File recibido, SocketAddress userAddress) throws IOException {
-        // Crear un flujo de entrada de bytes desde el archivo
-        FileInputStream stream = new FileInputStream(recibido);
+        //entrada de bytes
+        try (FileInputStream stream = new FileInputStream(recibido)) {
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            //obtengo la ruta y la mando
+            String ruta = "Ruta enviada: [ " + recibido.getPath() + " ]";
 
-        // Crear un buffer para almacenar temporalmente los bytes del archivo
-        byte[] buffer = new byte[1024];
-        int bytesRead;
-
-        String ruta = "Ruta enviada: [ " + recibido.getPath() + " ]";
-        // envio los bytes del archivo de 100 en 100 caracteres
-        while ((bytesRead = stream.read(buffer)) != -1) {
-            String str = new String(buffer, 0, bytesRead);
-            byte[] bytes = encriptar(kp, str, userAddress).getBytes();
-            DatagramPacket paquete = new DatagramPacket(bytes, bytes.length, userAddress);
-            filesServer.send(paquete);
+            while ((bytesRead = stream.read(buffer)) != -1) {
+                //lo encripto y envío al usuario
+                String str = new String(buffer, 0, bytesRead);
+                byte[] bytes = encriptar(kp, str, userAddress).getBytes();
+                DatagramPacket paquete = new DatagramPacket(bytes, bytes.length, userAddress);
+                filesServer.send(paquete);
+            }
         }
     }
 

@@ -92,15 +92,14 @@ public class ClientUDP {
     //usa un paquete que contiene bytes de la clave pública
     public static void sendKey() throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        // escribo la pk
         try (ObjectOutputStream oos = new ObjectOutputStream(baos)) {
             oos.writeObject(publicKey);
-        }
+        } 
         byte[] publicKeyBytes = baos.toByteArray();
         DatagramPacket packet = new DatagramPacket(publicKeyBytes, publicKeyBytes.length, InetAddress.getLocalHost(), 1111);
-        // envío el paquete
         ds.send(packet);
     }
+
 
     //uso base64 para desencriptar
     public static String desencriptar(String recibido) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
