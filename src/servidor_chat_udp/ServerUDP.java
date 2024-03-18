@@ -158,26 +158,14 @@ public class ServerUDP {
 
     //elige un nombre aleatorio de usuario si hay disponibles si no da uno por defecto
     public static String defaultName() {
-        String name;
         if (randomUsers.isEmpty()) {
-            name = "user";
-        }else{
-            name = randomUsers.get(cont);
-            randomUsers.remove(cont);
+            return "user";
         }
-        cont++;
-        return name;
+        return randomUsers.remove(cont++);
     }
 
     public static boolean clienteExists(SocketAddress userAddress) {
-        AtomicBoolean existe = new AtomicBoolean(false);
-        connected.forEach((key, value) -> {
-            if (value.equals(userAddress)) {
-                existe.set(true);
-            }
-        });
-        System.out.println(existe.get());
-        return existe.get();
+        return connected.containsValue(userAddress);
     }
 
     //crea el paquete y lo manda
