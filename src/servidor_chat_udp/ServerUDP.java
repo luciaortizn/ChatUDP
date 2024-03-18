@@ -196,7 +196,7 @@ public class ServerUDP {
             int bytesRead;
             //obtengo la ruta y la mando
             String ruta = "Ruta enviada: [ " + recibido.getPath() + " ]";
-
+            System.out.println(ruta);
             while ((bytesRead = stream.read(buffer)) != -1) {
                 //lo encripto y envío al usuario
                 String str = new String(buffer, 0, bytesRead);
