@@ -18,7 +18,7 @@ public class ServerUDP {
     //para los usuarios
     public static Map<String, SocketAddress> connected;
     private static final ArrayList<String> randomUsers = new ArrayList<>();
-    private static int contador = 0;
+    private static int cont = 0;
     //sockets distintos para cada acción
     private static DatagramSocket msgServer;
     private static DatagramSocket filesServer;
@@ -47,12 +47,13 @@ public class ServerUDP {
                 //recibimos el paquete
 
                 try {
+
                     msgServer.receive(dp);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
+                //lo bloqueo para acceder al mensaje de forma segura
                 lock.lock();
-
                 String paqueteString = new String(dp.getData(), 0, dp.getLength());
                 //ignore case por si acaso
                 if (new String(dp.getData(), 0, dp.getLength()).equalsIgnoreCase("salir")) {
@@ -77,26 +78,22 @@ public class ServerUDP {
                         });
                     } else {
                         //obtengo el array de bytes del paquete y los convierto en objeto -> public key
-                        ByteArrayInputStream bais = new ByteArrayInputStream(dp.getData());
                         try {
-                            ObjectInputStream  ois = new ObjectInputStream(bais);
-                            PublicKey  pk = (PublicKey) ois.readObject();
+                            ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(dp.getData()));
+                            PublicKey pk = (PublicKey) ois.readObject();
                             //añado user
                             kp.put(userAddress, pk);
                             //se le asigna usuario
                             nombre = defaultName();
                             connected.put(nombre, userAddress);
-
+                            //muestro en servidor
+                            System.out.println( nombre +" dice: " + paqueteString);
                         } catch (IOException | ClassNotFoundException e) {
                             throw new RuntimeException(e);
                         }
                     }
-                    //muestro en servidor
-                    System.out.println( nombre +" dice: " + paqueteString);
                     lock.unlock();
                 }
-
-
             }
         });
        hiloMsgs.start();
@@ -123,11 +120,9 @@ public class ServerUDP {
                 lock.lock();
 
                 try {
-                    //String paqueteString = new String(dp.getData(), 0, dp.getLength());
+                    //manejo de bytes para los archivos
                     SocketAddress userAddress = dp.getSocketAddress();
-                    ByteArrayInputStream bais = new ByteArrayInputStream(dp.getData());
-                    ObjectInputStream ois = new ObjectInputStream(bais);
-
+                    ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(dp.getData()));
                     File recibido = (File) ois.readObject();
                     nombre = getName(userAddress);
                     connected.forEach((cliente, socket) -> {
@@ -151,7 +146,8 @@ public class ServerUDP {
 
     //obtiene el nombre de usuario de la persona conectada
     private static String getName(SocketAddress userAddress) {
-        AtomicReference<String> nombre = new AtomicReference<>("user");
+        //necesito que sea atómico por la lambda
+        AtomicReference<String> nombre = new AtomicReference<>("");
         connected.forEach((key, value) -> {
             if (userAddress.equals(value)) {
                 nombre.set(key);
@@ -166,10 +162,10 @@ public class ServerUDP {
         if (randomUsers.isEmpty()) {
             name = "user";
         }else{
-            name = randomUsers.get(contador);
-            randomUsers.remove(contador);
+            name = randomUsers.get(cont);
+            randomUsers.remove(cont);
         }
-        contador++;
+        cont++;
         return name;
     }
 
@@ -186,15 +182,14 @@ public class ServerUDP {
 
     //crea el paquete y lo manda
     public static void sendMsgs(String msg, SocketAddress userAddress) throws IOException {
-        byte[] mensajeBytes = msg.getBytes();
-        DatagramPacket dp = new DatagramPacket(mensajeBytes, mensajeBytes.length, userAddress);
+        DatagramPacket dp = new DatagramPacket(msg.getBytes(), msg.getBytes().length, userAddress);
         msgServer.send(dp);
     }
     //obtiene el usuario desconectado y su mensaje de desconexión
     public static void exitUser(Map<SocketAddress, PublicKey> kp,SocketAddress userAddress) {
 
         String msg = getName(userAddress) + " se ha desconectado.";
-        connected.remove(getName(userAddress));
+
         connected.forEach((key, value) -> {
             //mando al todos los usuarios que se ha desconectado x user
             String encriptado = encriptar( kp,msg, value);
@@ -204,25 +199,27 @@ public class ServerUDP {
                 throw new RuntimeException(e);
             }
         });
-
+        connected.remove(getName(userAddress));
     }
 
     public static void sendFiles(Map<SocketAddress, PublicKey> kp, File recibido, SocketAddress userAddress) throws IOException {
-
+        // Crear un flujo de entrada de bytes desde el archivo
         FileInputStream stream = new FileInputStream(recibido);
-        int c;
-        StringBuilder str = new StringBuilder("Ruta enviada:  [ " + recibido.getPath() +" ]");
-        while ((c = stream.read()) != -1) {
-            if (str.length() < 100) {
-                str.append((char) c);
-            } else {
-                byte[] bytes = encriptar(kp , str.toString(), userAddress).getBytes();
-                DatagramPacket paquete = new DatagramPacket(bytes, bytes.length, userAddress);
-                filesServer.send(paquete);
-                str = new StringBuilder();
-            }
+
+        // Crear un buffer para almacenar temporalmente los bytes del archivo
+        byte[] buffer = new byte[1024];
+        int bytesRead;
+
+        String ruta = "Ruta enviada: [ " + recibido.getPath() + " ]";
+        // envio los bytes del archivo de 100 en 100 caracteres
+        while ((bytesRead = stream.read(buffer)) != -1) {
+            String str = new String(buffer, 0, bytesRead);
+            byte[] bytes = encriptar(kp, str, userAddress).getBytes();
+            DatagramPacket paquete = new DatagramPacket(bytes, bytes.length, userAddress);
+            filesServer.send(paquete);
         }
     }
+
     //encriptación asimétrica
     public static String encriptar(Map<SocketAddress, PublicKey> kp,String msg, SocketAddress socket) {
 

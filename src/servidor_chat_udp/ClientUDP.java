@@ -14,47 +14,27 @@ public class ClientUDP {
     private static PrivateKey privateKey;
     private static PublicKey publicKey;
     public static void main(String[] args) throws IOException, NoSuchAlgorithmException {
-        ds = new DatagramSocket();
         getKeys();
+        ds = new DatagramSocket();
         /*creo dos hilos
         uno gestiona el envío de mensajes y otro los recibe
+
         * */
-        Thread enviarMensaje = new Thread(() -> {
-            try {
-                while (true) {
-                    BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-                    String msg = br.readLine();
-                    if (!msg.equals("salir")) {
-
-                        sendMsg(msg);
-                        System.out.println("Enviado.");
-
-                    } else {
-
-                        sendMsg(msg);
-                        System.out.println("Te has desconectado del servidor.");
-                        //cerramos
-                        System.exit(0);
-                    }
-                }
-            } catch (IOException ex) {
-                throw new RuntimeException(ex);
-            }
-        });
-
         Thread recibirMensaje = new Thread(() -> {
             try {
                 while (true) {
-                    byte[] recibidoBytes = new byte[1024];
-                    DatagramPacket dpRecibido = new DatagramPacket(recibidoBytes, recibidoBytes.length);
-                    //obtengo el mensaje del datagram packet y lo convierto a formato string
-                    ds.receive(dpRecibido);
-                    String dpString = new String(dpRecibido.getData(), 0, dpRecibido.getLength());
-                    String desencriptado = desencriptar(dpString);
-                    if (desencriptado.contains("{")) {
-                        System.out.print(desencriptado);
+                    // creo un DatagramPacket para recibir datos
+                    byte[] buffer = new byte[1024];
+                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                    ds.receive(packet);
+                    String receivedData = new String(packet.getData(), 0, packet.getLength());
+                    //desencripto lo recibido
+                    String decryptedData = desencriptar(receivedData);
+
+                    if (decryptedData.contains("{")) {
+                        System.out.print(decryptedData);
                     } else {
-                        System.out.println("Sin leer: \n" + desencriptado);
+                        System.out.println("Sin leer:\n" + decryptedData);
                     }
                 }
             } catch (IOException | NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException |
@@ -63,10 +43,30 @@ public class ClientUDP {
             }
         });
 
-        recibirMensaje.start();
-        enviarMensaje.start();
-    }
+        Thread enviarMensaje = new Thread(() -> {
+            try {
+                while (true) {
+                    BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+                    String msg = br.readLine();
 
+                    // envio a servidor
+                    sendMsg(msg);
+                    if (msg.equals("salir")) {
+                        System.out.println("Te has desconectado del servidor.");
+                        //usuario se sale del programa
+                        System.exit(0);
+                    } else {
+                        System.out.println("Enviado.");
+                    }
+                }
+
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+        enviarMensaje.start();
+        recibirMensaje.start();
+    }
 
     //se envían los bytes de mi string msg pasado por parámetro
     public static void sendMsg(String msg) throws IOException {
@@ -91,16 +91,17 @@ public class ClientUDP {
 
     //usa un paquete que contiene bytes de la clave pública
     public static void sendKey() throws IOException {
-
-        //para contener los bytes y mandarlos
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ObjectOutputStream oas = new ObjectOutputStream(baos);
-        oas.writeObject(publicKey);
-        byte[] publicBytes = baos.toByteArray();
-        DatagramPacket publicData = new DatagramPacket(publicBytes, publicBytes.length, InetAddress.getLocalHost(), 1111);
-        //envío los bytes
-        ds.send(publicData);
+        // escribo la pk
+        try (ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+            oos.writeObject(publicKey);
+        }
+        byte[] publicKeyBytes = baos.toByteArray();
+        DatagramPacket packet = new DatagramPacket(publicKeyBytes, publicKeyBytes.length, InetAddress.getLocalHost(), 1111);
+        // envío el paquete
+        ds.send(packet);
     }
+
     //uso base64 para desencriptar
     public static String desencriptar(String recibido) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
 
